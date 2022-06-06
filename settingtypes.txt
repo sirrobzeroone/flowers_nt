@@ -1,0 +1,22 @@
+# This file contains all settings displayed in the settings menu for Flowers_NT.
+
+[Random Seed Spreading]
+# Random Seed Head Spread
+# The chance of a seed being randomly placed when a player digs a flower at Seeding Stage
+# A number between 1 and 100 representing the % chance of spread default is 50
+fnt_seed_head_spread (% Chance of Seed Spreading) int 50
+
+# Flower Density
+# The maximum number of a single type of flower that can be in 3x3 area before Seed Head Spread will never place
+# A number between 1 and 9 anything less than 1 will be treated as 1 and anything more than 9 will be treated as 9. 
+# Default value is 4
+flowers_nt_density (Max Number flower type in 3x3 area) int 4
+
+[Rollback]
+# Rollback/Uninstall Flowers NT
+# Set to true and make no other changes and Flowers_NT will attempt to remove its self from your game/server in a more
+# controlled way. See Flowers_NT ReadMe file for further information.
+rollback (Rollback) bool false
+
+
+
