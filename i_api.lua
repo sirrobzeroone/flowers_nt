@@ -54,6 +54,7 @@ function flowers_nt.grow_flower_tmr(pos)
 		local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
 		local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
 		local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death
+		local time_min    = flowers_nt.registered_flowers[fl_reg_name].time_min
 			
 			if not flowers_nt.allowed_to_grow(pos) then
 				minetest.remove_node(pos)
@@ -84,7 +85,7 @@ end
 function flowers_nt.allowed_to_grow(pos)
 	
 	local node       = minetest.get_node(pos)
-	local node_below = minetest.get_node({x=pos.x,y=pos.y-1,z=pos.z})			
+	local node_below = minetest.get_node({x=pos.x,y=pos.y-1,z=pos.z})	
 	local reg_name   = flowers_nt.get_name(node.name)
 	local can_grow   = false
 	local grow_on    = flowers_nt.registered_flowers[reg_name].grow_on
