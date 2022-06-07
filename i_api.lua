@@ -645,10 +645,7 @@ flowers_nt.register_flower = function(def)
 		--for water lily/surface water plants
 			if is_water then
 				stage_1.waving = 3
-				stage_1.on_place = function(itemstack, placer, pointed_thing) 
-										local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-										return ret_itemstack
-								   end
+				stage_1.on_place = flowers_nt.on_place_water
 			end
 		-- for mesh node_below
 			if drawtype == "mesh" then			
@@ -706,10 +703,7 @@ flowers_nt.register_flower = function(def)
 			--for water lily/surface water plants
 			if is_water then
 				stage_2.waving = 3
-				stage_2.on_place = function(itemstack, placer, pointed_thing) 
-										local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-										return ret_itemstack
-								   end
+				stage_2.on_place = flowers_nt.on_place_water
 			end
 			-- for mesh node_below
 			if drawtype == "mesh" then
@@ -772,10 +766,7 @@ flowers_nt.register_flower = function(def)
 		 --for water lily/surface water plants
 			if is_water then
 				stage_3.waving = 3
-				stage_3.on_place = function(itemstack, placer, pointed_thing) 
-										local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-										return ret_itemstack
-								   end
+				stage_3.on_place = flowers_nt.on_place_water
 			end
 		-- for mesh node_below
 			if drawtype == "mesh" then
@@ -843,10 +834,7 @@ flowers_nt.register_flower = function(def)
 		--for water lily/surface water plants
 			if is_water then
 				stage_3.waving = 3
-				stage_3.on_place = function(itemstack, placer, pointed_thing) 
-										local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-										return ret_itemstack
-								   end
+				stage_3.on_place = flowers_nt.on_place_water
 			end 
 		-- for mesh node_below
 			if drawtype == "mesh" then
@@ -919,10 +907,7 @@ flowers_nt.register_flower = function(def)
 		--for water lily/surface water plants
 			if is_water then
 				stage_4.waving = 3
-				stage_4.on_place = function(itemstack, placer, pointed_thing) 
-										local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-										return ret_itemstack
-								   end
+				stage_4.on_place = flowers_nt.on_place_water
 			end 
 		-- for mesh node_below
 			if drawtype == "mesh" then
@@ -962,30 +947,17 @@ flowers_nt.register_flower = function(def)
 					   },
 		  action = function(pos, node)
 				local meta = minetest.get_meta(pos)
-				local flowers_meta = meta:get_int("flowers_nt")
-
-					if flowers_meta == 0 then
-						local timer = minetest.get_node_timer(pos)
-						local flower_stage = tonumber(string.sub(node.name, -1))
-
+				local flowers_nt = meta:get_int("flowers_nt")
+				if flowers_nt == 0 then
+					local timer = minetest.get_node_timer(pos)
 						if not timer:is_started() then
+							local flower_stage = tonumber(string.sub(node.name, -1))				
+							
 							-- catch existing node stage 3
 							if flower_stage == nil then
 								flower_stage = 3
 							end
 							
-							--[[ very cpu/load intensive
-							-- randomise growth stage, ignore 3
-							if flower_stage == 3 then
-								local ran_stage = math.random(0,4)							
-								if ran_stage < 3 or ran_stage == 4 then
-									local fl_reg_name = flowers_nt.get_name(node.name)							
-									minetest.set_node(pos, {name = fl_reg_name.."_"..ran_stage})
-									flower_stage = ran_stage
-								end							
-							end]]
-										
-
 							if flower_stage == 3 or flower_stage == 4 then
 								timer:start(math.random(2*(time_min), 2*(time_max)))
 							else

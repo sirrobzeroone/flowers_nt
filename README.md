@@ -20,7 +20,7 @@ Shara, Paramat, Sokomine, ShadMOrdre, Rubenwardy, Krock, Termos, Linuxdirk, Skam
  4. [Complex Flower Example](#complex-flower-example)
  5. [Manually Configure Nodes](#manually-configure-nodes)
 	 1. [Flowers_NT Global Table](#flowers_nt-global-table)
-	 2. [Flowers_NT Functions](#flowers_nt-function)
+	 2. [Flowers_NT Functions](#flowers_nt-functions)
 	 3. [Registration example](#registration-example)
  6. [Game and Mod notes](#game-and-mod-notes)
  	 1. [Minetest Game](#minetest-game)
@@ -253,46 +253,46 @@ I know the above wont be perfect but I'm hoping it'll minimise issues when peopl
 Assuming all images are avaliable, your using MTG/Voxelgarden biomes etc as a base and your happy with the defaults and no existing flower to allow for, you can register the 5 stages + seed as simply as the below
 
     flowers_nt.register_flower({
-							flower_name = "Purple Chrysanthemum",
-							color       = "purple"
-							sounds      = default.node_sound_leaves_defaults(),
-							grow_on     = {"default:dirt",
-							               "default:dirt_with_grass"
-									      },
-							biomes      = {"grassland", "deciduous_forest"},
-							biome_seed  = 123456,
-							cover       = 4
-							})
+		flower_name = "Purple Chrysanthemum",
+		color       = "purple"
+		sounds      = default.node_sound_leaves_defaults(),
+		grow_on     = {"default:dirt",
+					   "default:dirt_with_grass"
+					  },
+		biomes      = {"grassland", "deciduous_forest"},
+		biome_seed  = 123456,
+		cover       = 4
+		})
 
 ## Complex Flower Example
 A more complex example showing a floating water plant and MTG/Voxelgarden biomes etc
 
     flowers_nt.register_flower({
-							flower_name = "sacred lotus",
-							color      	  = "white",
-							drawtype    	 = "mesh",
-							mesh        	 = "sacred_lotus.obj",
-							sounds      	 = default.node_sound_leaves_defaults(),
-							grow_on     	 = {"default:dirt",
-											    "default:water_source",
-											    "default:river_water_source"
-												},
-							time_min    	 = 120,
-							time_max    	 = 240,
-							is_water    	 = {"default:dirt"},
-							light_min   	 = 12,
-							light_max   	 = 14,
-							light_max_death  = true,
-							inv_img     	 = true,
-							biomes      	 = {"rainforest_swamp", "savanna_shore", "deciduous_forest_shore"},
-							biome_seed  	 = 11223344,
-							cover       	 = 7,
-							y_min       	 = 0,
-							y_max       	 = 0,
-							y_offset    	 = 1,
-							existing    	 = "example_mod:sacred_lotus",
-							on_use      	 = minetest.item_eat(2)
-							})
+		flower_name = "sacred lotus",
+		color      	  = "white",
+		drawtype    	 = "mesh",
+		mesh        	 = "sacred_lotus.obj",
+		sounds      	 = default.node_sound_leaves_defaults(),
+		grow_on     	 = {"default:dirt",
+							"default:water_source",
+							"default:river_water_source"
+							},
+		time_min    	 = 120,
+		time_max    	 = 240,
+		is_water    	 = {"default:dirt"},
+		light_min   	 = 12,
+		light_max   	 = 14,
+		light_max_death  = true,
+		inv_img     	 = true,
+		biomes      	 = {"rainforest_swamp", "savanna_shore", "deciduous_forest_shore"},
+		biome_seed  	 = 11223344,
+		cover       	 = 7,
+		y_min       	 = 0,
+		y_max       	 = 0,
+		y_offset    	 = 1,
+		existing    	 = "example_mod:sacred_lotus",
+		on_use      	 = minetest.item_eat(2)
+		})
 
 
 ## Manually Configure Nodes
@@ -432,100 +432,40 @@ This node is just an invisible marker, which holds the position that a flower do
 		buildable_to = true,
 		drop = "",
 		groups = {not_in_creative_inventory = 1, flower = 1},
-		on_timer = function(pos, elapsed)
-						local node_name = minetest.get_node(pos).name
-						local fl_reg_name = flowers_nt.get_name(node_name)						
-						local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
-						local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
-						local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
-						local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death
-						
-						-- not growable the marker is removed
-						if not flowers_nt.allowed_to_grow(pos) then
-							minetest.remove_node(pos)
-						
-						-- too dark or light then don't grow
-						elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-							   minetest.get_node_light(pos) > light_max and not l_max_death then
-							
-								minetest.get_node_timer(pos):start(time_min)
-								
-						elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-							   minetest.get_node_light(pos) > light_max and l_max_death then
-							
-								minetest.remove_node(pos)
-						
-						-- Grow the flower	
-						else
-							flowers_nt.set_grow_stage(pos)							
-						end
-					end
+		on_timer = flowers_nt.grow_flower_tmr
 	})
 	
-Notes:   
-For floating plants you'll need to add:   
-
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
-
 #### Register Node Stage 1 - Flower Seedling
 	minetest.register_node(m_name..":"..reg_name.."_1", {
-			description = S("Flower Name Seedling"),
-			drawtype = "plantlike",              -- change to "mesh" if using mesh
-			-- mesh = "mesh_name.obj",           -- uncomment if using mesh
-			waving = 1,
-			tiles = {"image_name.png"},          -- update
-			inventory_image = "image_name.png",  -- update
-			wield_image = "image_name.png",      -- update
-			-- use_texture_alpha = "clip",        -- uncomment if using mesh
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			sounds = node_sound_leaves(),        -- update
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
-			},
-			groups = {dig_immediate = 3, flammable = 2, flower = 1},
+		description = S("Flower Name Seedling"),
+		drawtype = "plantlike",              -- change to "mesh" if using mesh
+		-- mesh = "mesh_name.obj",           -- uncomment if using mesh
+		waving = 1,
+		tiles = {"image_name.png"},          -- update
+		inventory_image = "image_name.png",  -- update
+		wield_image = "image_name.png",      -- update
+		-- use_texture_alpha = "clip",        -- uncomment if using mesh
+		paramtype = "light",
+		sunlight_propagates = true,
+		walkable = false,
+		is_ground_content = true,
+		buildable_to = true,
+		sounds = node_sound_leaves(),        -- update
+		selection_box = {
+			type = "fixed",
+			fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
+		},
+		groups = {dig_immediate = 3, flammable = 2, flower = 1},
 
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
-							   
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
-							  end,
+		after_place_node = function(pos, placer, itemstack)
+							flowers_nt.no_grow(pos)
+						   end,
+						   
+		after_dig_node = function(pos, oldnode, oldmetadata, digger)				
+							flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+						  end,
 			
-			on_timer = function(pos, elapsed)
-							local node_name = minetest.get_node(pos).name
-							local fl_reg_name = flowers_nt.get_name(node_name)						
-							local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
-							local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
-							local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
-							local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death
-							
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-						elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-							   minetest.get_node_light(pos) > light_max and not l_max_death then
-							
-								minetest.get_node_timer(pos):start(time_min)
-								
-						elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-							   minetest.get_node_light(pos) > light_max and l_max_death then
-							
-								minetest.remove_node(pos)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+		on_timer = flowers_nt.grow_flower_tmr
 		})
 
 Notes:   
@@ -533,137 +473,81 @@ For floating water plant then waving must = 3
 For mesh change drawtype to "mesh", mesh = "mesh.obj" and use_texture_alpha = "clip"  
 For floating plants you'll need to add:   
 
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
+    on_place = flowers_nt.on_place_water
 	   
 #### Register Node Stage 2 - Flower Budding
 	minetest.register_node(m_name..":"..reg_name.."_2", {
-			description = S("Flower Name Budding"),
-			drawtype = "plantlike",              -- change to "mesh" if using mesh
-			-- mesh = "mesh_name.obj",           -- uncomment if using mesh
-			waving = 1,
-			tiles = {"image_name.png"},          -- update
-			inventory_image = "image_name.png",  -- update
-			wield_image = "image_name.png",      -- update
-			-- use_texture_alpha = "clip",       -- uncomment if using mesh
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			sounds = node_sound_leaves(),        -- update
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
-			},
-			groups = {dig_immediate = 3, flammable = 2, flower = 1},
+		description = S("Flower Name Budding"),
+		drawtype = "plantlike",              -- change to "mesh" if using mesh
+		-- mesh = "mesh_name.obj",           -- uncomment if using mesh
+		waving = 1,
+		tiles = {"image_name.png"},          -- update
+		inventory_image = "image_name.png",  -- update
+		wield_image = "image_name.png",      -- update
+		-- use_texture_alpha = "clip",       -- uncomment if using mesh
+		paramtype = "light",
+		sunlight_propagates = true,
+		walkable = false,
+		is_ground_content = true,
+		buildable_to = true,
+		sounds = node_sound_leaves(),        -- update
+		selection_box = {
+			type = "fixed",
+			fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
+		},
+		groups = {dig_immediate = 3, flammable = 2, flower = 1},
 
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
+		after_place_node = function(pos, placer, itemstack)
+							flowers_nt.no_grow(pos)
+						   end,
 
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
-							  end,
-			
-			on_timer = function(pos, elapsed)
-							local node_name = minetest.get_node(pos).name
-							local fl_reg_name = flowers_nt.get_name(node_name)						
-							local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
-							local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
-							local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
-							local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death							
-			
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-						elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-							   minetest.get_node_light(pos) > light_max and not l_max_death then
-							
-								minetest.get_node_timer(pos):start(time_min)
-								
-						elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-							   minetest.get_node_light(pos) > light_max and l_max_death then
-							
-								minetest.remove_node(pos)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
-		}
+		after_dig_node = function(pos, oldnode, oldmetadata, digger)				
+							flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+						  end,
+		
+		on_timer = flowers_nt.grow_flower_tmr
+	}
 		
 Notes:   
 For floating water plant then waving must = 3   
 For mesh change drawtype to "mesh", mesh = "mesh.obj" and use_texture_alpha = "clip"   
 For floating plants you'll need to add:   
 
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
+    on_place = flowers_nt.on_place_water
 			   
 #### Register Node Stage 3 - Flowering
 	minetest.register_node(m_name..":"..reg_name.."_3" or ":existing_mod_name:flower_registered", {	
-			description = S(Flower Name),
-			drawtype = "plantlike",              -- change to "mesh" if using mesh
-			-- mesh = "mesh_name.obj",           -- uncomment if using mesh
-			waving = 1,
-			tiles = {"image_name.png"},          -- update
-			inventory_image = "image_name.png",  -- update
-			wield_image = "image_name.png",      -- update
-			-- use_texture_alpha = "clip",       -- uncomment if using mesh
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			sounds = node_sound_leaves(),        -- update
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
-			},
-			
-			groups = {dig_immediate = 3, flammable = 2, flower = 1, color_"name" = 1}, -- update
+		description = S(Flower Name),
+		drawtype = "plantlike",              -- change to "mesh" if using mesh
+		-- mesh = "mesh_name.obj",           -- uncomment if using mesh
+		waving = 1,
+		tiles = {"image_name.png"},          -- update
+		inventory_image = "image_name.png",  -- update
+		wield_image = "image_name.png",      -- update
+		-- use_texture_alpha = "clip",       -- uncomment if using mesh
+		paramtype = "light",
+		sunlight_propagates = true,
+		walkable = false,
+		is_ground_content = true,
+		buildable_to = true,
+		sounds = node_sound_leaves(),        -- update
+		selection_box = {
+			type = "fixed",
+			fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
+		},
+		
+		groups = {dig_immediate = 3, flammable = 2, flower = 1, color_"name" = 1}, -- update
 
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
+		after_place_node = function(pos, placer, itemstack)
+							flowers_nt.no_grow(pos)
+						   end,
 
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
-							  end,
-			
-			on_timer = function(pos, elapsed)				
-						local node_name = minetest.get_node(pos).name
-						local fl_reg_name = flowers_nt.get_name(node_name)						
-						local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
-						local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
-						local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
-						local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death
-						
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
-			})
+		after_dig_node = function(pos, oldnode, oldmetadata, digger)				
+							flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+						  end,
+		
+		on_timer = flowers_nt.grow_flower_tmr
+	})
 			
 Notes:    
 To override existing registered flower use ":" infront of the registered name eg ":default:tulip"    
@@ -671,177 +555,129 @@ For floating water plant then waving must = 3
 For mesh change drawtype to "mesh", mesh = "mesh.obj" and use_texture_alpha = "clip"   
 For floating plants you'll need to add:   
 
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
+    on_place = flowers_nt.on_place_water
 	   
 #### Register Node Stage 4 - Flower Seed Head/Dead
 	minetest.register_node(m_name..":"..reg_name.."_4",{
-			description = S("Flower Name Seed Head"),
-			drawtype = "plantlike",              -- change to "mesh" if using mesh
-			-- mesh = "mesh_name.obj",           -- uncomment if using mesh
-			waving = 1,
-			tiles = {"image_name.png"},          -- update
-			inventory_image = "image_name.png",  -- update
-			wield_image = "image_name.png",      -- update
-			-- use_texture_alpha = "clip",       -- uncomment if using mesh
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			sounds = node_sound_leaves(),        -- update
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
-			},
-			groups = {dig_immediate = 3, flammable = 2, flower = 1},
-			drop = m_name..":"..reg_name.."_5",
-			
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
+		description = S("Flower Name Seed Head"),
+		drawtype = "plantlike",              -- change to "mesh" if using mesh
+		-- mesh = "mesh_name.obj",           -- uncomment if using mesh
+		waving = 1,
+		tiles = {"image_name.png"},          -- update
+		inventory_image = "image_name.png",  -- update
+		wield_image = "image_name.png",      -- update
+		-- use_texture_alpha = "clip",       -- uncomment if using mesh
+		paramtype = "light",
+		sunlight_propagates = true,
+		walkable = false,
+		is_ground_content = true,
+		buildable_to = true,
+		sounds = node_sound_leaves(),        -- update
+		selection_box = {
+			type = "fixed",
+			fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
+		},
+		groups = {dig_immediate = 3, flammable = 2, flower = 1},
+		drop = m_name..":"..reg_name.."_5",
+		
+		after_place_node = function(pos, placer, itemstack)
+							flowers_nt.no_grow(pos)
+						   end,
 
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)
-								flowers_nt.seed_spread(pos, oldnode, digger)			
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
-							  end,
-			
-			on_timer = function(pos, elapsed)
-						local node_name = minetest.get_node(pos).name
-						local fl_reg_name = flowers_nt.get_name(node_name)						
-						local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
-						local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
-						local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
-						local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death						
-						
-							if not flowers_nt.allowed_to_grow(pos)then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
-		})
+		after_dig_node = function(pos, oldnode, oldmetadata, digger)
+							flowers_nt.seed_spread(pos, oldnode, digger)			
+							flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+						  end,
+		
+		on_timer = flowers_nt.grow_flower_tmr
+	})
 		
 Notes:   
 For floating water plant then waving must = 3   
 For mesh change drawtype to "mesh", mesh = "mesh.obj" and use_texture_alpha = "clip"   
 For floating plants you'll need to add:   
 
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
+    on_place = flowers_nt.on_place_water
 
 #### Register Node Stage 5 - Flower Seed
-		minetest.register_node(m_name..":"..reg_name.."_5", {
-			description = S(Flower Name Seed"),
-			drawtype = "plantlike",              -- change to "mesh" if using mesh
-			-- mesh = "mesh_name.obj",           -- uncomment if using mesh
-			waving = 1,
-			tiles = {"image_name.png"},          -- update
-			inventory_image = "image_name.png",  -- update
-			wield_image = "image_name.png",      -- update
-			-- use_texture_alpha = "clip",       -- uncomment if using mesh
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			sounds = node_sound_leaves(),        -- update
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
-			},
-			groups = {dig_immediate = 3, seed = 1, flower = 1},
-			
-			on_place = function(itemstack, placer, pointed_thing)
-						local node_below    = minetest.get_node(pointed_thing.under)
-						local node_name   = node_below.name						
-						local fl_reg_name = flowers_nt.get_name(itemstack:get_name())
-						local rot_place   = flowers_nt.registered_flowers[fl_reg_name].rot_place
-						local node_p2     = "N"
-						local is_water    = flowers_nt.registered_flowers[fl_reg_name].is_water
-						local a_pos         = pointed_thing.above
+	minetest.register_node(m_name..":"..reg_name.."_5", {
+		description = S(Flower Name Seed"),
+		drawtype = "plantlike",              -- change to "mesh" if using mesh
+		-- mesh = "mesh_name.obj",           -- uncomment if using mesh
+		waving = 1,
+		tiles = {"image_name.png"},          -- update
+		inventory_image = "image_name.png",  -- update
+		wield_image = "image_name.png",      -- update
+		-- use_texture_alpha = "clip",       -- uncomment if using mesh
+		paramtype = "light",
+		sunlight_propagates = true,
+		walkable = false,
+		is_ground_content = true,
+		buildable_to = true,
+		sounds = node_sound_leaves(),        -- update
+		selection_box = {
+			type = "fixed",
+			fixed = {-0.25,-0.5,-0.25, 0.25, 0.4, 0.25}
+		},
+		groups = {dig_immediate = 3, seed = 1, flower = 1},
+		
+		on_place = function(itemstack, placer, pointed_thing)
+					local node_below    = minetest.get_node(pointed_thing.under)
+					local node_name   = node_below.name						
+					local fl_reg_name = flowers_nt.get_name(itemstack:get_name())
+					local rot_place   = flowers_nt.registered_flowers[fl_reg_name].rot_place
+					local node_p2     = "N"
+					local is_water    = flowers_nt.registered_flowers[fl_reg_name].is_water
+					local a_pos         = pointed_thing.above
+					
+					if rot_place then
+						node_p2 = math.random(0,3)
+					end
+					
+					-- Liquid nodes need special handling for seeds
+					if is_water then													
+						local grow_on    = flowers_nt.registered_flowers[fl_reg_name].grow_on
+						local can_grow   = false
 						
-						if rot_place then
-							node_p2 = math.random(0,3)
-						end
-						
-						-- Liquid nodes need special handling for seeds
-						if is_water then													
-							local grow_on    = flowers_nt.registered_flowers[fl_reg_name].grow_on
-							local can_grow   = false
-							
-							for k,node_name in pairs(grow_on) do
-								if node_name == node_below.name then
-									can_grow = true
-									break
-								end
-							end	
-							
-							if can_grow then
-								minetest.set_node(a_pos, {name = fl_reg_name.."_0",param2 = node_p2})
-								minetest.get_node_timer(a_pos):start(math.random(time_min, time_max))
-								
-								if not minetest.is_creative_enabled(placer:get_player_name()) then
-									itemstack:take_item()
-								end
-							end
-
-						else
-							-- catches case: clicking dirt with water source above
-							local node_a_name = minetest.get_node(a_pos).name
-							if node_a_name == "air" then
-								minetest.item_place_node(itemstack, placer, pointed_thing)
+						for k,node_name in pairs(grow_on) do
+							if node_name == node_below.name then
+								can_grow = true
+								break
 							end
 						end	
-						return itemstack
-					end,
-			
-			after_place_node = function(pos, placer, itemstack)
-									minetest.get_node_timer(pos):start(math.random(1, time_min/2))
-							   end,
-			
-			on_timer = function(pos, elapsed)
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								minetest.spawn_item(pos, m_name..":"..reg_name.."_5")
-								
-							elseif minetest.get_node_light(pos) < light_min or 
-								   minetest.get_node_light(pos) > light_max then
-								
-									minetest.get_node_timer(pos):start(time_min)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
+						
+						if can_grow then
+							minetest.set_node(a_pos, {name = fl_reg_name.."_0",param2 = node_p2})
+							minetest.get_node_timer(a_pos):start(math.random(time_min, time_max))
+							
+							if not minetest.is_creative_enabled(placer:get_player_name()) then
+								itemstack:take_item()
 							end
 						end
-		})	
+
+					else
+						-- catches case: clicking dirt with water source above
+						local node_a_name = minetest.get_node(a_pos).name
+						if node_a_name == "air" then
+							minetest.item_place_node(itemstack, placer, pointed_thing)
+						end
+					end	
+					return itemstack
+				end,
+		
+		after_place_node = function(pos, placer, itemstack)
+								minetest.get_node_timer(pos):start(math.random(1, time_min/2))
+						   end,
+		
+		on_timer = flowers_nt.grow_flower_tmr
+	})	
 
 Notes: 
 For floating water plant then waving must = 3
 For mesh change drawtype to "mesh", mesh = "mesh.obj" and use_texture_alpha = "clip"   
 For floating plants you'll need to add:   
 
-    on_place = function(itemstack, placer, pointed_thing) 
-                local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
-                return ret_itemstack
-    end
+    on_place =  flowers_nt.on_place_water
 
 #### Register LBM
 So the node timers can start on mapgen an LBM must be registered for your flower/herb nodes. 
