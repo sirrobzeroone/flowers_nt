@@ -40,6 +40,44 @@ flowers_nt.cover = {{["offset"] = -0.039,   ["scale"] = 0.04},    -- 1 about hal
 					{["offset"] =  0.050,   ["scale"] = 0.08}     -- 8 Everywhere - not super dense
 			}
 
+------------------
+-- Flower Timer --
+------------------
+function flowers_nt.grow_flower_tmr(pos)
+
+	local node_name = minetest.get_node(pos).name
+	local fl_reg_name = flowers_nt.get_name(node_name)
+
+	-- This shouldn't happen but just in case fl_reg_name returns false log an error 
+	if fl_reg_name then 						
+		local light_min = flowers_nt.registered_flowers[fl_reg_name].light_min
+		local light_max = flowers_nt.registered_flowers[fl_reg_name].light_max
+		local l_min_death = flowers_nt.registered_flowers[fl_reg_name].l_min_death
+		local l_max_death = flowers_nt.registered_flowers[fl_reg_name].l_max_death
+			
+			if not flowers_nt.allowed_to_grow(pos) then
+				minetest.remove_node(pos)
+				
+			elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
+				   minetest.get_node_light(pos) > light_max and not l_max_death then
+				
+					minetest.get_node_timer(pos):start(time_min)
+					
+			elseif minetest.get_node_light(pos) < light_min and l_min_death or 
+				   minetest.get_node_light(pos) > light_max and l_max_death then
+				
+					minetest.remove_node(pos)											
+			else
+				flowers_nt.set_grow_stage(pos)				
+			end
+	else
+		-- If this occurs continually may indicate someone delibratly trying to crash server/game
+		-- Explanation: Somehow the flower node was removed between timer expiring and the above code running
+		-- I honestly don't believe this event can occur without some form of CSM being deployed, but you never know. 
+		minetest.log("info", "Timer fail - see mod flowers_nt >> i_api.lua code line 76") 
+	end		
+end
+
 -----------------------------
 -- Allowed to grow on node --
 -----------------------------
@@ -210,6 +248,7 @@ function flowers_nt.get_name(node_name)
 	
 	return p_name
 end
+
 ----------------------
 -- Seed Head Spread --
 ----------------------
@@ -290,31 +329,37 @@ function flowers_nt.seed_spread(pos,oldnode,player)
 			if rot_place then
 				node_p2 = math.random(0,3)
 			end
-			-- drop the seed on our selected node using particles					
-			minetest.add_particlespawner({
-				   amount = 2,
-				   time = 2,
-				   minpos = ran_nodes[index],
-				   maxpos = ran_nodes[index],
-				   minvel = {x=0, y=-1, z=0},
-				   maxvel = {x=0, y=0, z=0},
-				   minacc = {x=0, y=-1, z=0},
-				   maxacc = {x=0, y=0, z=0},
-				   minexptime = 1,
-				   maxexptime = 1,
-				   minsize = 6,
-				   maxsize = 6,
-				   collisiondetection = false,
-				   collision_removal = false,
-				   object_collision = false,
-				   vertical = false,
-				   texture = minetest.registered_nodes[reg_name.."_5"].tiles[1]
-					})
-					
+			-- drop the seed on our selected node using particles and set marker/timer				
+			flowers_nt.seed_place_effect(ran_nodes[index],reg_name)			
 			minetest.set_node(ran_nodes[index], {name = reg_name.."_0", param2 = node_p2})
 			minetest.get_node_timer(ran_nodes[index]):start(math.random(time_min, time_max))			
 		end
 	end
+end
+-----------------------
+-- Seed Place Effect --
+-----------------------
+function flowers_nt.seed_place_effect(pos, fl_reg_name)	
+	local amount = 	math.random(1,3)	
+	minetest.add_particlespawner({
+		   amount = amount,
+		   time = 2,
+		   minpos = pos,
+		   maxpos = pos,
+		   minvel = {x=0, y=-1, z=0},
+		   maxvel = {x=0, y=0, z=0},
+		   minacc = {x=0, y=-1, z=0},
+		   maxacc = {x=0, y=0, z=0},
+		   minexptime = 1,
+		   maxexptime = 1,
+		   minsize = 6,
+		   maxsize = 6,
+		   collisiondetection = false,
+		   collision_removal = false,
+		   object_collision = false,
+		   vertical = false,
+		   texture = minetest.registered_nodes[fl_reg_name.."_5"].tiles[1]
+			})			
 end
 
 -----------------------
@@ -482,7 +527,8 @@ flowers_nt.register_flower = function(def)
 						local rot_place   = flowers_nt.registered_flowers[fl_reg_name].rot_place
 						local node_p2     = "N"
 						local is_water    = flowers_nt.registered_flowers[fl_reg_name].is_water
-						local a_pos         = pointed_thing.above
+						local a_pos       = pointed_thing.above
+						local u_pos       = pointed_thing.under
 						
 						if rot_place then
 							node_p2 = math.random(0,3)
@@ -501,6 +547,7 @@ flowers_nt.register_flower = function(def)
 							end	
 							
 							if can_grow then
+								flowers_nt.seed_place_effect(a_pos, fl_reg_name)								
 								minetest.set_node(a_pos, {name = fl_reg_name.."_0",param2 = node_p2})
 								minetest.get_node_timer(a_pos):start(math.random(time_min, time_max))
 								
@@ -511,8 +558,11 @@ flowers_nt.register_flower = function(def)
 
 						else
 							-- catches case: clicking dirt with water source above
+							-- disallow placement on non-growing nodes, I played around with allowing
+							-- placement and then popping seed off as dropped item and disallowing 
+							-- placement this seems a better way to go.
 							local node_a_name = minetest.get_node(a_pos).name
-							if node_a_name == "air" then
+							if node_a_name == "air" and flowers_nt.allowed_to_grow(u_pos) then
 								minetest.item_place_node(itemstack, placer, pointed_thing)
 							end
 						end	
@@ -523,25 +573,7 @@ flowers_nt.register_flower = function(def)
 									minetest.get_node_timer(pos):start(math.random(1, time_min/2))
 							   end,
 			
-			on_timer = function(pos, elapsed)
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								minetest.spawn_item(pos, m_name..":"..reg_name.."_5")
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)											
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+			on_timer = flowers_nt.grow_flower_tmr
 		}
 		
 		-- for extra groups 
@@ -567,19 +599,7 @@ flowers_nt.register_flower = function(def)
 			buildable_to = true,
 			drop = "",
 			groups = {not_in_creative_inventory = 1, flower = 1},
-			on_timer = function(pos, elapsed)		
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min or 
-								   minetest.get_node_light(pos) > light_max then
-								minetest.get_node_timer(pos):start(time_min)
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+			on_timer = flowers_nt.grow_flower_tmr
 		}
 		-- For rot_place 
 		if rot_place then
@@ -619,25 +639,7 @@ flowers_nt.register_flower = function(def)
 								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)							
 							  end,
 			
-			on_timer = function(pos, elapsed)
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)	
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+			on_timer = flowers_nt.grow_flower_tmr
 		}
 						
 		--for water lily/surface water plants
@@ -698,25 +700,7 @@ flowers_nt.register_flower = function(def)
 								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
 							  end,
 			
-			on_timer = function(pos, elapsed)
-							if not flowers_nt.allowed_to_grow(pos) then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)	
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+			on_timer = flowers_nt.grow_flower_tmr
 		}
 
 			--for water lily/surface water plants
@@ -782,25 +766,7 @@ flowers_nt.register_flower = function(def)
 									flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
 								  end,
 				
-				on_timer = function(pos, elapsed)
-								if not flowers_nt.allowed_to_grow(pos) then
-									minetest.remove_node(pos)
-									
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)
-									
-								else
-									flowers_nt.set_grow_stage(pos)
-									
-								end
-							end				
+				on_timer = flowers_nt.grow_flower_tmr			
 			}
 			
 		 --for water lily/surface water plants
@@ -871,25 +837,7 @@ flowers_nt.register_flower = function(def)
 									flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
 								  end,
 				
-				on_timer = function(pos, elapsed)
-								if not flowers_nt.allowed_to_grow(pos) then
-									minetest.remove_node(pos)
-									
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)	
-									
-								else
-									flowers_nt.set_grow_stage(pos)
-									
-								end
-							end
+				on_timer = flowers_nt.grow_flower_tmr
 			}
 			
 		--for water lily/surface water plants
@@ -965,25 +913,7 @@ flowers_nt.register_flower = function(def)
 								end							
 							  end,
 			
-			on_timer = function(pos, elapsed)
-							if not flowers_nt.allowed_to_grow(pos)then
-								minetest.remove_node(pos)
-								
-							elseif minetest.get_node_light(pos) < light_min and not l_min_death or 
-								   minetest.get_node_light(pos) > light_max and not l_max_death then
-								
-									minetest.get_node_timer(pos):start(time_min)
-									
-							elseif minetest.get_node_light(pos) < light_min and l_min_death or 
-								   minetest.get_node_light(pos) > light_max and l_max_death then
-								
-									minetest.remove_node(pos)	
-								
-							else
-								flowers_nt.set_grow_stage(pos)
-								
-							end
-						end
+			on_timer = flowers_nt.grow_flower_tmr
 		}
 
 		--for water lily/surface water plants
@@ -1017,7 +947,9 @@ flowers_nt.register_flower = function(def)
 		--------------------------------
 		--  Flower LBM, trigger timer  --
 		--------------------------------	
-		-- LBM is needed to start the timers on load/mapgen
+		-- LBM is needed to start the timers on inital mapgen
+		-- Additionally it slightly randomizes flower stage so they
+		-- are not all equal to stage 3
 		minetest.register_lbm({
 		  name = m_name..":"..reg_name,
 		  run_at_every_load = true, 
@@ -1029,27 +961,39 @@ flowers_nt.register_flower = function(def)
 					   m_name..":"..reg_name.."_5"	-- seed			   
 					   },
 		  action = function(pos, node)
-			local meta = minetest.get_meta(pos)
-			local flowers_nt = meta:get_int("flowers_nt")
+				local meta = minetest.get_meta(pos)
+				local flowers_meta = meta:get_int("flowers_nt")
 
-			if flowers_nt == 0 then
-				local timer = minetest.get_node_timer(pos)
-					if not timer:is_started() then
-					local flower_stage = tonumber(string.sub(node.name, -1))
-						
-						-- catch existing node stage 3
-						if flower_stage == nil then
-							flower_stage = 3
-						end
-						
-						if flower_stage == 3 or flower_stage == 4 then
-							timer:start(math.random(2*(time_min), 2*(time_max)))
-						else
-							timer:start(math.random(time_min, time_max))
+					if flowers_meta == 0 then
+						local timer = minetest.get_node_timer(pos)
+						local flower_stage = tonumber(string.sub(node.name, -1))
+
+						if not timer:is_started() then
+							-- catch existing node stage 3
+							if flower_stage == nil then
+								flower_stage = 3
+							end
+							
+							--[[ very cpu/load intensive
+							-- randomise growth stage, ignore 3
+							if flower_stage == 3 then
+								local ran_stage = math.random(0,4)							
+								if ran_stage < 3 or ran_stage == 4 then
+									local fl_reg_name = flowers_nt.get_name(node.name)							
+									minetest.set_node(pos, {name = fl_reg_name.."_"..ran_stage})
+									flower_stage = ran_stage
+								end							
+							end]]
+										
+
+							if flower_stage == 3 or flower_stage == 4 then
+								timer:start(math.random(2*(time_min), 2*(time_max)))
+							else
+								timer:start(math.random(time_min, time_max))
+							end
 						end
 					end
-				end
-			end,
+				end,
 		})
 		
 		----------------------------------
@@ -1103,7 +1047,7 @@ flowers_nt.register_flower = function(def)
 		if existing ~= nil then
 			minetest.register_lbm({
 			  name = m_name..":"..reg_name,
-			  run_at_every_load = true, 
+			  run_at_every_load = true,     -- letting this run everytime in case someone places something out of storage
 			  nodenames = {m_name..":"..reg_name.."_0", 
 						   m_name..":"..reg_name.."_1", 
 						   m_name..":"..reg_name.."_2",

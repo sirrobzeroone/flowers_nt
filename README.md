@@ -340,6 +340,9 @@ Value Key = existing_reg_node_name eg "default:tulip"
 	
 ### Flowers_NT Functions
 
+**flowers_nt.grow_flower_tmr(pos)**
+Main flower timer to allow them to grow - calls flowers_nt.allowed_to_grow() and flowers_nt.set_grow_stage()
+
 **flowers_nt.allowed_to_grow(pos)**
 Uses the registered grow_on list to check if the node below is still growable for that flower type
 
@@ -373,7 +376,8 @@ eg node name = "default:tulip" returns "flowers_nt:orange_tulip"
 eg node name = "default:dirt" returns false 
 
 **flowers_nt.on_place_water(itemstack, placer, pointed_thing)**
-Haven't fully worked out why but if I on_place a mesh water plant to water even if the node is water pointable it will be placed on the bottom under the water. This function works around this issue so floating plants when manually placed float ontop of liquid nodes. returns itemstack    
+Haven't fully worked out why but if I on_place a mesh water plant to water even if the node is water pointable it will be placed on the bottom under the water. This function works around this issue so floating plants when manually placed float ontop of liquid nodes. returns itemstack
+    
     on_place = function(itemstack, placer, pointed_thing) 
                 local ret_itemstack = flowers_nt.on_place_water(itemstack, placer, pointed_thing)
                 return ret_itemstack
