@@ -82,17 +82,25 @@ end
 -----------------------------
 -- Allowed to grow on node --
 -----------------------------
-function flowers_nt.allowed_to_grow(pos)
+function flowers_nt.allowed_to_grow(pos,reg_name)
+	local node
+	local node_below	
+	local can_grow  = false
 	
-	local node       = minetest.get_node(pos)
-	local node_below = minetest.get_node({x=pos.x,y=pos.y-1,z=pos.z})	
-	local reg_name   = flowers_nt.get_name(node.name)
-	local can_grow   = false
-	local grow_on    = flowers_nt.registered_flowers[reg_name].grow_on
+	if reg_name ~= nil then
+		node_below = minetest.get_node(pos)
+	else
+		node       = minetest.get_node(pos)
+		node_below = minetest.get_node({x=pos.x,y=pos.y-1,z=pos.z})	
+		reg_name   = flowers_nt.get_name(node.name)		
+	end
 	
 	-- catches any strange events were node timer expires 
 	-- but flower stage has vanished (falling node/tnt explosion for example)
 	if reg_name then
+		
+		local grow_on    = flowers_nt.registered_flowers[reg_name].grow_on
+		
 		for k,node_name in pairs(grow_on) do
 			if node_name == node_below.name then
 				can_grow = true
@@ -558,12 +566,11 @@ flowers_nt.register_flower = function(def)
 							end
 
 						else
-							-- catches case: clicking dirt with water source above
 							-- disallow placement on non-growing nodes, I played around with allowing
 							-- placement and then popping seed off as dropped item and disallowing 
 							-- placement this seems a better way to go.
 							local node_a_name = minetest.get_node(a_pos).name
-							if node_a_name == "air" and flowers_nt.allowed_to_grow(u_pos) then
+							if node_a_name == "air" and flowers_nt.allowed_to_grow(u_pos,fl_reg_name) then
 								minetest.item_place_node(itemstack, placer, pointed_thing)
 							end
 						end	

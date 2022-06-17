@@ -16,6 +16,7 @@ local m_path = minetest.get_modpath(m_name)
 -- setup mod global table and registered flowers table
 flowers_nt = {}
 flowers_nt.registered_flowers = {}
+flowers_nt.game_tail = ""
 
 -- Settings, bit excessive but was intresting to do
 dofile(m_path .. "/i_get_settintype.lua")
@@ -29,24 +30,6 @@ flowers_nt.rollback_replace = {}
 
 --files to load	
 dofile(m_path .. "/i_api.lua")
-
--- Specific game files to load
-local game_id = Settings(minetest.get_worldpath()..DIR_DELIM..'world.mt'):get('gameid')
-flowers_nt.game_tail = ""
-
-if game_id == "minetest" then
-	dofile(m_path.. "/i_game_mtg.lua" )
-end
-
-if game_id == "voxelgarden" then
-	flowers_nt.game_tail = "_vg"
-	dofile(m_path.. "/i_game_vg.lua" )
-end
-
--- if Bonemeal mod loaded
-if minetest.get_modpath("bonemeal") ~= nil then
-	dofile(m_path.. "/i_bonemeal_override.lua" )		
-end
 
 -- Load confirmation 
 -- minetest.debug("[MOD] flowers_nt loaded")
