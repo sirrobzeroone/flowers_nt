@@ -13,7 +13,6 @@
 ---------------------------------------------------
 
 Applies to 3d models, textures and lua code/script
-Except i_bonemeal_override.lua which is MIT Copyright (c) 2016 TenPlus1
 
 https://creativecommons.org/publicdomain/zero/1.0/
 

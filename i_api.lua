@@ -398,6 +398,13 @@ function flowers_nt.delete_decoration(dec_names)
 	end
 end
 
+----------------------------------
+-- Add to Registered Decoration --
+----------------------------------
+function flowers_nt.add_to_decoration(dec_names)
+
+
+end
 -----------------
 -- Disable ABM --
 -----------------
@@ -975,45 +982,100 @@ flowers_nt.register_flower = function(def)
 					end
 				end,
 		})
-		
+
+
+
+	
 		----------------------------------
 		--  Flower Register Decoration  --
 		----------------------------------
-	if existing ~= nil then
-		flowers_nt.delete_decoration({existing})
-	end		
-		local dec_def = {
-			name = m_name..":"..reg_name,
-			deco_type = "simple",
-			place_on = place_on,
-			sidelen = 16,
-			noise_params = {
-				offset = offset,
-				scale = scale,
-				spread = {x = 200, y = 200, z = 200},
-				seed = seed,
-				octaves = 3,
-				persist = 0.6 },
-			biomes = biomes,
-			y_max = y_max,
-			y_min = y_min,
-			place_offset_y = y_offset,
-			decoration = s3_name
-		}
+		
+		if existing ~= nil then
+			
+			local function has_value (tab, val)
+				for index, value in pairs(tab) do
+					if value == val then
+						return value
+					end
+				end
+				return false
+			end
 
-		--for water lily/surface water plants
-		if is_water and y_offset == 0 then
-			dec_def.place_offset_y  = 1
-		end
+			local add_to = {existing}
+			local reg_dec_cpy = table.copy(minetest.registered_decorations)
 
-		--for random rotation on placement
-		if rot_place then
-			dec_def.param2 = 0
-			dec_def.param2_max = 3				
+			for k,v in pairs(reg_dec_cpy) do
+				local def_reg
+				local def_name
+				if type(v.decoration)== "table" then 
+					for k2,v2 in pairs(v.decoration) do
+					
+						if has_value(add_to,v2) then 
+							table.insert(v.decoration,m_name..":"..reg_name.."_1")
+							table.insert(v.decoration,m_name..":"..reg_name.."_2")
+							table.insert(v.decoration,m_name..":"..reg_name.."_4")
+						
+							def_reg = v
+							def_name = k
+						end						
+					end
+				
+				elseif type(v.decoration) == "string" then
+
+					if has_value(add_to,v.decoration) then 
+
+						v.decoration = {m_name..":"..reg_name.."_1",
+										m_name..":"..reg_name.."_2",
+										v.decoration,
+										m_name..":"..reg_name.."_4"}	
+						def_reg = v
+						def_name = k
+										
+					end			
+				end
+				
+				if def_reg ~= nil then
+					flowers_nt.delete_decoration({def_name})
+					minetest.register_decoration(def_reg)
+				end				
+			end	
+						
+		else		
+				local dec_def = {
+					name = m_name..":"..reg_name,
+					deco_type = "simple",
+					place_on = place_on,
+					sidelen = 16,
+					noise_params = {
+						offset = offset,
+						scale = scale,
+						spread = {x = 200, y = 200, z = 200},
+						seed = seed,
+						octaves = 3,
+						persist = 0.6 },
+					biomes = biomes,
+					y_max = y_max,
+					y_min = y_min,
+					place_offset_y = y_offset,
+					decoration = {m_name..":"..reg_name.."_1", 
+								  m_name..":"..reg_name.."_2", 
+								  s3_name,
+								  m_name..":"..reg_name.."_4"}
+				}
+		
+			--for water lily/surface water plants
+			if is_water and y_offset == 0 then
+				dec_def.place_offset_y  = 1
+			end
+
+			--for random rotation on placement
+			if rot_place then
+				dec_def.param2 = 0
+				dec_def.param2_max = 3				
+			end
+		
+			minetest.register_decoration(dec_def)
 		end
-	
-		minetest.register_decoration(dec_def)
-	
 	else
 --------------
 -- Rollback --
