@@ -75,7 +75,7 @@ function flowers_nt.grow_flower_tmr(pos)
 		-- If this occurs continually may indicate someone delibratly trying to crash server/game
 		-- Explanation: Somehow the flower node was removed between timer expiring and the above code running
 		-- I honestly don't believe this event can occur without some form of CSM being deployed, but you never know. 
-		minetest.log("info", "Timer fail - see mod flowers_nt >> i_api.lua code line 76") 
+		minetest.log("info", "Flowers_NT:Timer fail - see mod flowers_nt >> i_api.lua code line 76") 
 	end		
 end
 
@@ -374,27 +374,17 @@ end
 -----------------------
 -- Delete Decoration --
 -----------------------
-function flowers_nt.delete_decoration(dec_names)
+function flowers_nt.delete_decoration(dec_name)
 	-- need to remove the existing decoration registeration, unfortunatly just clearing
 	-- the value from minetest.registered_decorations table does not work. Very heavy handed
 	-- clearing all decs and then re-register all but the one, but I've found no other
 	-- way to do this.
 	-- See: https://forum.minetest.net/viewtopic.php?f=47&t=25925
-	
-	local function has_value (tab, val)
-		for index, value in pairs(tab) do
-			if value == val then
-				return true
-			end
-		end
-		return false
-	end
 
-	local exclude = dec_names
 	local reg_dec_cpy = table.copy(minetest.registered_decorations)
 	minetest.clear_registered_decorations()
 	for k,v in pairs(reg_dec_cpy) do
-		if not has_value(exclude,v.name) then minetest.register_decoration(v) end
+		if dec_name ~= k then minetest.register_decoration(v) else end		
 	end
 end
 
@@ -427,7 +417,7 @@ flowers_nt.register_flower = function(def)
 	local S = minetest.get_translator(m_name)
 	-- Split the name value provided into desc value and registered 
 	-- name value - minor character checking and cleanup
-	local name       = string.lower(def.flower_name )
+	local name       = string.lower(def.flower_name or "Mandatory")
 	local reg_name   = string.gsub(name," ","_")
 	local desc_name  = string.gsub(name,"_"," ")
 		  --https://stackoverflow.com/questions/20284515/capitalize-first-letter-of-every-word-in-lua (thanks to: n1xx1)
@@ -441,8 +431,8 @@ flowers_nt.register_flower = function(def)
 	local place_on   = table.copy(def.grow_on)
 	local biomes     = def.biomes
 	local seed       = def.biome_seed
-	local offset     = flowers_nt.cover[def.cover].offset or 0.04
-	local scale      = flowers_nt.cover[def.cover].scale  or -0.02
+	local offset     = flowers_nt.cover[def.cover or 4].offset
+	local scale      = flowers_nt.cover[def.cover or 4].scale
 	local y_max      = def.y_max or 31000
 	local y_min      = def.y_min or 1
 	local y_offset   = 0
@@ -450,6 +440,7 @@ flowers_nt.register_flower = function(def)
 	local color      = string.lower(def.color or "nil")
     local e_groups   = def.e_groups or nil
 	local sounds     = def.sounds or nil
+	local light_src  = def.light_source or nil
 	local light_min  = def.light_min or 12
 	local light_max  = def.light_max or 15
 	local l_min_death= def.light_min_death or false
@@ -461,299 +452,215 @@ flowers_nt.register_flower = function(def)
 	local inv_img    = def.inv_img or false
 	local inv_img_n  = m_name.."_"..reg_name
 	local is_water   = def.is_water or false
+	local walkable   = def.walkable or false
 	local sel_box    = def.sel_box  or {-0.3,-0.5,-0.3,0.3,0.25,0.3}
 	local on_use     = def.on_use or nil
+	local on_punch_2 = def.on_punch_2 or nil	
+	local on_punch_3 = def.on_punch_3 or nil
+	local on_punch_4 = def.on_punch_4 or nil
 	local existing   = def.existing or nil
 	local s3_name    = m_name..":"..reg_name.."_3"
 	local gt         = flowers_nt.game_tail
+	local valid_data = true
 	
-	-- Catch unsupported drawtypes
-	if drawtype ~= "mesh" and drawtype ~= "plantlike" and drawtype ~= "torchlike" then
-		drawtype = "plantlike"
+	-- Mandatory fields check
+	if existing ~= nil then
+		if name    == "Mandatory" or 
+		   grow_on == nil then	
+			
+			valid_data = false
+		end		
+	else
+		if name    == "Mandatory" or 
+		   grow_on == nil or
+		   biomes  == nil or 
+		   seed    == nil then	
+			
+			valid_data = false
+		end	 	
 	end
 
-	-- is_water may have node names to ignore
-	if type(is_water) == "table" then		
-		for _,node_name in pairs(is_water) do			
-			for k,g_node_name in pairs(grow_on) do
-				if g_node_name == node_name then
-					table.remove(grow_on, k)
-				end			
+	if not valid_data then
+		minetest.log("info", "Flowers_NT - Mandatory data not supplied to register flower. See Readme for Mandatory fields") 
+
+	else
+		-- Catch unsupported drawtypes
+		if drawtype ~= "mesh" and drawtype ~= "plantlike" and drawtype ~= "torchlike" then
+			drawtype = "plantlike"
+			minetest.log("info", "Flowers_NT - Unsupported drawtype for "..def.flower_name.." changed to plantlike.") 
+		end
+
+		-- is_water may have node names to ignore
+		if type(is_water) == "table" then		
+			for _,node_name in pairs(is_water) do			
+				for k,g_node_name in pairs(grow_on) do
+					if g_node_name == node_name then
+						table.remove(grow_on, k)
+					end			
+				end		
 			end		
-		end		
-		is_water = true
-	end
-	
-	-- Unique inv image case
-	if inv_img then
-		inv_img_n = m_name.."_"..reg_name.."_inv"	
-	end
-	
-	if flowers_nt.rollback == false then
-		-- Add flower to global registered_flowers table.
-		flowers_nt.registered_flowers[m_name..":"..reg_name] = {}
-		flowers_nt.registered_flowers[m_name..":"..reg_name] = {						
-							reg_name  = reg_name,
-							desc_name = desc_name,
-							grow_on   = grow_on,
-							light_min = light_min,
-							light_max = light_max,
-							l_min_death = l_min_death,
-							l_max_death = l_max_death,
-							time_min  = time_min,
-							time_max  = time_max,
-							color     = color,
-							rot_place = rot_place,
-							existing  = existing,
-							is_water  = is_water}
-		-- Add existing to global registered_flowers table as key
-		if existing ~= nil then
-			flowers_nt.registered_flowers[existing] = {}
-			flowers_nt.registered_flowers[existing] = {						
-								parent = m_name..":"..reg_name}
+			is_water = true
 		end
 		
-		-------------------
-		--  Flower Seed  --
-		-------------------
-		local stage_5 = {
-			description = S(desc_name..stage_5_name),
-			tiles = {m_name.."_"..reg_name..gt.."_5.png"},
-			inventory_image = m_name.."_"..reg_name..gt.."_5.png",
-			wield_image = m_name.."_"..reg_name..gt.."_5.png",
-			drawtype = "signlike",
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			pointable = true,
-			diggable = true,
-			buildable_to = true,
-			is_ground_content = true,
-			liquids_pointable = is_water,
-			selection_box = {
-				type = "fixed",
-				fixed = {-0.4,-0.5,-0.4, 0.4, -0.25, 0.4}
-			},
-			groups = {dig_immediate = 3, flammable = 2, seed = 1, flower = 1},
+		-- Unique inv image case
+		if inv_img then
+			inv_img_n = m_name.."_"..reg_name.."_inv"	
+		end
+		
+		if flowers_nt.rollback == false then
+			-- Add flower to global registered_flowers table.
+			flowers_nt.registered_flowers[m_name..":"..reg_name] = {}
+			flowers_nt.registered_flowers[m_name..":"..reg_name] = {						
+								reg_name  = reg_name,
+								desc_name = desc_name,
+								grow_on   = grow_on,
+								light_min = light_min,
+								light_max = light_max,
+								l_min_death = l_min_death,
+								l_max_death = l_max_death,
+								time_min  = time_min,
+								time_max  = time_max,
+								color     = color,
+								rot_place = rot_place,
+								existing  = existing,
+								is_water  = is_water}
 			
-			on_place = function(itemstack, placer, pointed_thing)
-						local node_below    = minetest.get_node(pointed_thing.under)
-						local node_name   = node_below.name						
-						local fl_reg_name = flowers_nt.get_name(itemstack:get_name())
-						local rot_place   = flowers_nt.registered_flowers[fl_reg_name].rot_place
-						local node_p2     = "N"
-						local is_water    = flowers_nt.registered_flowers[fl_reg_name].is_water
-						local a_pos       = pointed_thing.above
-						local u_pos       = pointed_thing.under
-						
-						if rot_place then
-							node_p2 = math.random(0,3)
-						end
-						
-						-- Liquid nodes need special handling for seeds
-						if is_water then													
-							local grow_on    = flowers_nt.registered_flowers[fl_reg_name].grow_on
-							local can_grow   = false
+			-- Add existing to global registered_flowers table as key
+			if existing ~= nil then
+				flowers_nt.registered_flowers[existing] = {}
+				flowers_nt.registered_flowers[existing] = {						
+									parent = m_name..":"..reg_name}
+			end
+			
+			-------------------
+			--  Flower Seed  --
+			-------------------
+			local stage_5 = {
+				description = S(desc_name..stage_5_name),
+				tiles = {m_name.."_"..reg_name..gt.."_5.png"},
+				inventory_image = m_name.."_"..reg_name..gt.."_5.png",
+				wield_image = m_name.."_"..reg_name..gt.."_5.png",
+				drawtype = "signlike",
+				paramtype = "light",
+				sunlight_propagates = true,
+				walkable = false,
+				pointable = true,
+				diggable = true,
+				buildable_to = true,
+				is_ground_content = true,
+				liquids_pointable = is_water,
+				selection_box = {
+					type = "fixed",
+					fixed = {-0.4,-0.5,-0.4, 0.4, -0.25, 0.4}
+				},
+				groups = {dig_immediate = 3, seed = 1, flower = 1},
+				
+				on_place = function(itemstack, placer, pointed_thing)
+							local node_below    = minetest.get_node(pointed_thing.under)
+							local node_name   = node_below.name						
+							local fl_reg_name = flowers_nt.get_name(itemstack:get_name())
+							local rot_place   = flowers_nt.registered_flowers[fl_reg_name].rot_place
+							local node_p2     = "N"
+							local is_water    = flowers_nt.registered_flowers[fl_reg_name].is_water
+							local a_pos       = pointed_thing.above
+							local u_pos       = pointed_thing.under
 							
-							for k,node_name in pairs(grow_on) do
-								if node_name == node_below.name then
-									can_grow = true
-									break
+							if rot_place then
+								node_p2 = math.random(0,3)
+							end
+							
+							-- Liquid nodes need special handling for seeds
+							if is_water then													
+								local grow_on    = flowers_nt.registered_flowers[fl_reg_name].grow_on
+								local can_grow   = false
+								
+								for k,node_name in pairs(grow_on) do
+									if node_name == node_below.name then
+										can_grow = true
+										break
+									end
+								end	
+								
+								if can_grow then
+									flowers_nt.seed_place_effect(a_pos, fl_reg_name)								
+									minetest.set_node(a_pos, {name = fl_reg_name.."_0",param2 = node_p2})
+									minetest.get_node_timer(a_pos):start(math.random(time_min, time_max))
+									
+									if not minetest.is_creative_enabled(placer:get_player_name()) then
+										itemstack:take_item()
+									end
+								end
+
+							else
+								-- disallow placement on non-growing nodes, I played around with allowing
+								-- placement and then popping seed off as dropped item and disallowing 
+								-- placement this seems a better way to go.
+								local node_a_name = minetest.get_node(a_pos).name
+								if node_a_name == "air" and flowers_nt.allowed_to_grow(u_pos,fl_reg_name) then
+									minetest.item_place_node(itemstack, placer, pointed_thing)
 								end
 							end	
-							
-							if can_grow then
-								flowers_nt.seed_place_effect(a_pos, fl_reg_name)								
-								minetest.set_node(a_pos, {name = fl_reg_name.."_0",param2 = node_p2})
-								minetest.get_node_timer(a_pos):start(math.random(time_min, time_max))
-								
-								if not minetest.is_creative_enabled(placer:get_player_name()) then
-									itemstack:take_item()
-								end
-							end
-
-						else
-							-- disallow placement on non-growing nodes, I played around with allowing
-							-- placement and then popping seed off as dropped item and disallowing 
-							-- placement this seems a better way to go.
-							local node_a_name = minetest.get_node(a_pos).name
-							if node_a_name == "air" and flowers_nt.allowed_to_grow(u_pos,fl_reg_name) then
-								minetest.item_place_node(itemstack, placer, pointed_thing)
-							end
-						end	
-						return itemstack
-					end,
-			
-			after_place_node = function(pos, placer, itemstack)
-									minetest.get_node_timer(pos):start(math.random(1, time_min/2))
-							   end,
-			
-			on_timer = flowers_nt.grow_flower_tmr
-		}
-		
-		-- for extra groups 
-		if e_groups then
-			for grp_name,level in pairs(e_groups) do
-				stage_5.groups[grp_name] = level
-			end
-		end
-		
-		minetest.register_node(m_name..":"..reg_name.."_5", stage_5)
-		
-		---------------------------------
-		--  Flower Dormant  Stage Zero --
-		---------------------------------
-		local stage_0 = {
-			description = S(desc_name.." Dormant"),
-			drawtype = "airlike",
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			pointable = false,
-			diggable = false,
-			buildable_to = true,
-			drop = "",
-			groups = {not_in_creative_inventory = 1, flower = 1},
-			on_timer = flowers_nt.grow_flower_tmr
-		}
-		-- For rot_place 
-		if rot_place then
-			stage_0.paramtype2 = "facedir"
-		end
-		
-		minetest.register_node(m_name..":"..reg_name.."_0", stage_0)	
-		
-		-----------------------------
-		-- Flower Growth Stage One --
-		-----------------------------
-		local stage_1 = {
-			description = S(desc_name..stage_1_name),
-			drawtype = drawtype,
-			waving = 1,
-			tiles = {m_name.."_"..reg_name..gt.."_1.png"},
-			inventory_image = inv_img_n..gt.."_1.png",
-			wield_image = inv_img_n..gt.."_1.png",
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			liquids_pointable = is_water,
-			sounds = sounds,
-			selection_box = {
-				type = "fixed",
-				fixed = sel_box
-			},
-			groups = {dig_immediate = 2, flammable = 1, flower = 1},
-
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
-							   
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)							
-							  end,
-			
-			on_timer = flowers_nt.grow_flower_tmr
-		}
-						
-		--for water lily/surface water plants
-			if is_water then
-				stage_1.waving = 3
-				stage_1.on_place = flowers_nt.on_place_water
-			end
-		-- for mesh node_below
-			if drawtype == "mesh" then			
-				stage_1.mesh = mesh
-				stage_1.use_texture_alpha = "clip"
-			end
-		-- For rot_place 
-			if rot_place then
-				stage_1.paramtype2 = "facedir"
-			end
-			
-		-- for extra groups 
-		if e_groups then
-			for grp_name,level in pairs(e_groups) do
-				stage_1.groups[grp_name] = level
-			end
-		end
-			
-			minetest.register_node(m_name..":"..reg_name.."_1", stage_1)	
-			
-		-------------------------------	
-		--  Flower Growth Stage Two  --
-		-------------------------------
-		 local stage_2 ={
-			description = S(desc_name..stage_2_name),
-			drawtype = drawtype,
-			waving = 1,
-			tiles = {m_name.."_"..reg_name..gt.."_2.png"},
-			inventory_image = inv_img_n..gt.."_2.png",
-			wield_image = inv_img_n..gt.."_2.png",
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			liquids_pointable = is_water,
-			sounds = sounds,
-			selection_box = {
-				type = "fixed",
-				fixed = sel_box
-			},
-			groups = {dig_immediate = 2, flammable = 1, flower = 1},
-
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
-
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-								flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
-							  end,
-			
-			on_timer = flowers_nt.grow_flower_tmr
-		}
-
-			--for water lily/surface water plants
-			if is_water then
-				stage_2.waving = 3
-				stage_2.on_place = flowers_nt.on_place_water
-			end
-			-- for mesh node_below
-			if drawtype == "mesh" then
-				stage_2.mesh = mesh
-				stage_2.use_texture_alpha = "clip"
-			end
-			-- For rot_place 
-			if rot_place then
-				stage_2.paramtype2 = "facedir"
-			end
+							return itemstack
+						end,
+				
+				after_place_node = function(pos, placer, itemstack)
+										--minetest.get_node_timer(pos):start(math.random(1, time_min/2))
+								   end,
+				
+				on_timer = flowers_nt.grow_flower_tmr
+			}
 			
 			-- for extra groups 
 			if e_groups then
 				for grp_name,level in pairs(e_groups) do
-					stage_2.groups[grp_name] = level
+					stage_5.groups[grp_name] = level
 				end
 			end
 			
-			minetest.register_node(m_name..":"..reg_name.."_2", stage_2)	
+			-- light source (even the seeds/spores glow faintly)
+			if light_src then
+				local light = math.floor(tonumber(light_src/2))
+				
+				if light_src > 0 and light_src <= 15 then
+					stage_5.light_source = tonumber(light_src) 
+				end
+			end
 			
-		---------------------------------
-		--  Flower Growth Stage Three  --
-		---------------------------------
-			-- allows for insertion of exisiting flower at stage 3
-			-- primarily to support MTG-Flowers
-		local stage_3
-		if existing ~= nil then
-			s3_name = existing
-			stage_3 = {	
-				description = S(desc_name..stage_3_name),
+			minetest.register_node(m_name..":"..reg_name.."_5", stage_5)
+			
+			---------------------------------
+			--  Flower Dormant  Stage Zero --
+			---------------------------------
+			local stage_0 = {
+				description = S(desc_name.." Dormant"),
+				drawtype = "airlike",
+				paramtype = "light",
+				sunlight_propagates = true,
+				walkable = false,
+				pointable = false,
+				diggable = false,
+				buildable_to = true,
+				drop = "",
+				groups = {not_in_creative_inventory = 1, flower = 1},
+				on_timer = flowers_nt.grow_flower_tmr
+			}
+			-- For rot_place 
+			if rot_place then
+				stage_0.paramtype2 = "facedir"
+			end
+			
+			minetest.register_node(m_name..":"..reg_name.."_0", stage_0)	
+			
+			-----------------------------
+			-- Flower Growth Stage One --
+			-----------------------------
+			local stage_1 = {
+				description = S(desc_name..stage_1_name),
 				drawtype = drawtype,
 				waving = 1,
-				tiles = {m_name.."_"..reg_name..gt.."_3.png"},
-				inventory_image = inv_img_n..gt.."_3.png",
-				wield_image = inv_img_n..gt.."_3.png",
+				tiles = {m_name.."_"..reg_name..gt.."_1.png"},
+				inventory_image = inv_img_n..gt.."_1.png",
+				wield_image = inv_img_n..gt.."_1.png",
 				paramtype = "light",
 				sunlight_propagates = true,
 				walkable = false,
@@ -765,65 +672,65 @@ flowers_nt.register_flower = function(def)
 					type = "fixed",
 					fixed = sel_box
 				},
-				groups = {dig_immediate = 2, flammable = 1, flower = 1},
-				
+				groups = {dig_immediate = 2, flower = 1},
+
 				after_place_node = function(pos, placer, itemstack)
 									flowers_nt.no_grow(pos)
 								   end,
-				
+								   
 				after_dig_node = function(pos, oldnode, oldmetadata, digger)				
-									flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+									flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)							
 								  end,
 				
-				on_timer = flowers_nt.grow_flower_tmr			
+				on_timer = flowers_nt.grow_flower_tmr
 			}
-			
-		 --for water lily/surface water plants
-			if is_water then
-				stage_3.waving = 3
-				stage_3.on_place = flowers_nt.on_place_water
-			end
-		-- for mesh node_below
-			if drawtype == "mesh" then
-				stage_3.mesh = mesh
-				stage_3.use_texture_alpha = "clip"
-			end	
-			
-		-- add color group
-			if color ~= "nil" then -- it's a string not true nil
-				stage_3.groups["color_"..color] = 1
-			end
-		
-		-- For rot_place 
-			if rot_place then
-				stage_3.paramtype2 = "facedir"
-			end
-			
-		-- on_use
-			if on_use ~= nil then
-				stage_3.on_use = on_use			
-			end
-
-		-- for extra groups 
-		if e_groups then
-			for grp_name,level in pairs(e_groups) do
-				stage_3.groups[grp_name] = level
-			end
-		end
-			
-			minetest.register_node(":"..existing,stage_3)
 							
-		else
-			stage_3 = {	
-				description = S(desc_name..stage_3_name),
+			--for water lily/surface water plants
+				if is_water then
+					stage_1.waving = 3
+					stage_1.on_place = flowers_nt.on_place_water
+				end
+			-- for mesh node_below
+				if drawtype == "mesh" then			
+					stage_1.mesh = mesh
+					stage_1.use_texture_alpha = "clip"
+				end
+			-- For rot_place 
+				if rot_place then
+					stage_1.paramtype2 = "facedir"
+				end
+				
+			-- for extra groups 
+			if e_groups then
+				for grp_name,level in pairs(e_groups) do
+					stage_1.groups[grp_name] = level
+				end
+			end
+			
+			-- light source
+			if light_src then
+				local light = math.floor(tonumber(light_src/2))
+				
+				if light_src > 0 and light_src <= 15 then
+					stage_1.light_source = tonumber(light_src) 
+				end
+			end
+				
+				minetest.register_node(m_name..":"..reg_name.."_1", stage_1)	
+				
+			-------------------------------	
+			--  Flower Growth Stage Two  --
+			-------------------------------
+			 local stage_2 ={
+				description = S(desc_name..stage_2_name),
 				drawtype = drawtype,
 				waving = 1,
-				tiles = {m_name.."_"..reg_name..gt.."_3.png"},
-				inventory_image = inv_img_n..gt.."_3.png",
-				wield_image = inv_img_n..gt.."_3.png",
+				tiles = {m_name.."_"..reg_name..gt.."_2.png"},
+				inventory_image = inv_img_n..gt.."_2.png",
+				wield_image = inv_img_n..gt.."_2.png",
 				paramtype = "light",
 				sunlight_propagates = true,
-				walkable = false,
+				walkable = walkable,
 				is_ground_content = true,
 				buildable_to = true,
 				liquids_pointable = is_water,
@@ -832,8 +739,7 @@ flowers_nt.register_flower = function(def)
 					type = "fixed",
 					fixed = sel_box
 				},
-				
-				groups = {dig_immediate = 2, flammable = 1, flower = 1},
+				groups = {dig_immediate = 2, flower = 1},
 
 				after_place_node = function(pos, placer, itemstack)
 									flowers_nt.no_grow(pos)
@@ -845,312 +751,494 @@ flowers_nt.register_flower = function(def)
 				
 				on_timer = flowers_nt.grow_flower_tmr
 			}
-			
-		--for water lily/surface water plants
-			if is_water then
-				stage_3.waving = 3
-				stage_3.on_place = flowers_nt.on_place_water
-			end 
-		-- for mesh node_below
-			if drawtype == "mesh" then
-				stage_3.mesh = mesh
-				stage_3.use_texture_alpha = "clip"
-			end	
-			
-		-- add color group
-			if color ~= "nil" then -- it's a string not true nil
-				stage_3.groups["color_"..color] = 1
+
+				--for water lily/surface water plants
+				if is_water then
+					stage_2.waving = 3
+					stage_2.on_place = flowers_nt.on_place_water
+				end
+				-- for mesh node_below
+				if drawtype == "mesh" then
+					stage_2.mesh = mesh
+					stage_2.use_texture_alpha = "clip"
+					stage_2.collision_box ={type = "fixed", fixed = sel_box}
+				end
+				-- For rot_place 
+				if rot_place then
+					stage_2.paramtype2 = "facedir"
+				end
+				
+				-- on_punch 
+				if on_punch_2 ~= nil then
+					stage_2.on_punch = on_punch_2			
+				end
+				
+				-- for extra groups 
+				if e_groups then
+					for grp_name,level in pairs(e_groups) do
+						stage_2.groups[grp_name] = level
+					end
+				end
+				
+			-- light source
+			if light_src then
+				if light_src > 0 and light_src <= 15 then
+					stage_2.light_source = light_src 
+				end
 			end
-		
-		-- For rot_place 
-			if rot_place then
-				stage_3.paramtype2 = "facedir"
-			end
-						
-		-- on_use
-			if on_use ~= nil then
-				stage_3.on_use = on_use			
-			end	
+				
+				minetest.register_node(m_name..":"..reg_name.."_2", stage_2)	
+				
+			---------------------------------
+			--  Flower Growth Stage Three  --
+			---------------------------------
+				-- allows for insertion of exisiting flower at stage 3
+				-- primarily to support MTG-Flowers
+			local stage_3
+			if existing ~= nil then
+				s3_name = existing
+				stage_3 = {	
+					description = S(desc_name..stage_3_name),
+					drawtype = drawtype,
+					waving = 1,
+					tiles = {m_name.."_"..reg_name..gt.."_3.png"},
+					inventory_image = inv_img_n..gt.."_3.png",
+					wield_image = inv_img_n..gt.."_3.png",
+					paramtype = "light",
+					sunlight_propagates = true,
+					walkable = walkable,
+					is_ground_content = true,
+					buildable_to = true,
+					liquids_pointable = is_water,
+					sounds = sounds,
+					selection_box = {
+						type = "fixed",
+						fixed = sel_box
+					},
+					groups = {dig_immediate = 2, flower = 1},
+					
+					after_place_node = function(pos, placer, itemstack)
+										flowers_nt.no_grow(pos)
+									   end,
+					
+					after_dig_node = function(pos, oldnode, oldmetadata, digger)				
+										flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+									  end,
+					
+					on_timer = flowers_nt.grow_flower_tmr			
+				}
+				
+			 --for water lily/surface water plants
+				if is_water then
+					stage_3.waving = 3
+					stage_3.on_place = flowers_nt.on_place_water
+				end
+			-- for mesh node_below
+				if drawtype == "mesh" then
+					stage_3.mesh = mesh
+					stage_3.use_texture_alpha = "clip"
+					stage_3.collision_box ={type = "fixed", fixed = sel_box}
+				end	
+				
+			-- add color group
+				if color ~= "nil" then -- it's a string not true nil
+					stage_3.groups["color_"..color] = 1
+				end
 			
+			-- For rot_place 
+				if rot_place then
+					stage_3.paramtype2 = "facedir"
+				end
+				
+			-- on_use
+				if on_use ~= nil then
+					stage_3.on_use = on_use			
+				end
+				
+			-- on_punch 
+				if on_punch_3 ~= nil then
+					stage_3.on_punch = on_punch_3			
+				end
+
 			-- for extra groups 
 			if e_groups then
 				for grp_name,level in pairs(e_groups) do
 					stage_3.groups[grp_name] = level
 				end
+			end
+			
+			-- light source
+			if light_src then
+				if light_src > 0 and light_src <= 15 then
+					stage_3.light_source = light_src 
+				end
 			end			
-			minetest.register_node(m_name..":"..reg_name.."_3",stage_3)	
 			
-		end
-
-		--------------------------------
-		--  Flower Growth Stage Four  --
-		--------------------------------	
-		local stage_4 = {
-			description = S(desc_name..stage_4_name),
-			drawtype = drawtype,
-			waving = 1,
-			tiles = {m_name.."_"..reg_name..gt.."_4.png"},
-			inventory_image = inv_img_n..gt.."_4.png",
-			wield_image = inv_img_n..gt.."_4.png",
-			paramtype = "light",
-			sunlight_propagates = true,
-			walkable = false,
-			is_ground_content = true,
-			buildable_to = true,
-			liquids_pointable = is_water,
-			sounds = sounds,
-			selection_box = {
-				type = "fixed",
-				fixed = sel_box
-			},
-			groups = {dig_immediate = 3, flammable = 3, flower = 1},
-			drop = m_name..":"..reg_name.."_5",
-			
-			after_place_node = function(pos, placer, itemstack)
-								flowers_nt.no_grow(pos)
-							   end,
-
-			after_dig_node = function(pos, oldnode, oldmetadata, digger)			
-								if flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata) then
-									flowers_nt.seed_spread(pos, oldnode, digger)
-								end							
-							  end,
-			
-			on_timer = flowers_nt.grow_flower_tmr
-		}
-
-		--for water lily/surface water plants
-			if is_water then
-				stage_4.waving = 3
-				stage_4.on_place = flowers_nt.on_place_water
-			end 
-		-- for mesh node_below
-			if drawtype == "mesh" then
-				stage_4.mesh = mesh
-				stage_4.use_texture_alpha = "clip"
-			end	
-		
-		-- For rot_place 
-			if rot_place then
-				stage_4.paramtype2 = "facedir"
-			end
-			
-		-- for extra groups 
-		if e_groups then
-			for grp_name,level in pairs(e_groups) do
-				stage_4.groups[grp_name] = level
-			end
-		end
-			
-		minetest.register_node(m_name..":"..reg_name.."_4",stage_4)	
-			
-		--------------------------------
-		--  Flower LBM, trigger timer  --
-		--------------------------------	
-		-- LBM is needed to start the timers on inital mapgen
-		-- Additionally it slightly randomizes flower stage so they
-		-- are not all equal to stage 3
-		minetest.register_lbm({
-		  name = m_name..":"..reg_name,
-		  run_at_every_load = true, 
-		  nodenames = {m_name..":"..reg_name.."_0", 
-					   m_name..":"..reg_name.."_1", 
-					   m_name..":"..reg_name.."_2",
-					   s3_name,
-					   m_name..":"..reg_name.."_4",
-					   m_name..":"..reg_name.."_5"	-- seed			   
-					   },
-		  action = function(pos, node)
-				local meta = minetest.get_meta(pos)
-				local flowers_nt = meta:get_int("flowers_nt")
-				if flowers_nt == 0 then
-					local timer = minetest.get_node_timer(pos)
-						if not timer:is_started() then
-							local flower_stage = tonumber(string.sub(node.name, -1))				
-							
-							-- catch existing node stage 3
-							if flower_stage == nil then
-								flower_stage = 3
-							end
-							
-							if flower_stage == 3 or flower_stage == 4 then
-								timer:start(math.random(2*(time_min), 2*(time_max)))
-							else
-								timer:start(math.random(time_min, time_max))
-							end
-						end
-					end
-				end,
-		})
-
-
-
-	
-		----------------------------------
-		--  Flower Register Decoration  --
-		----------------------------------
-		
-		if existing ~= nil then
-			
-			local function has_value (tab, val)
-				for index, value in pairs(tab) do
-					if value == val then
-						return value
-					end
-				end
-				return false
-			end
-
-			local add_to = {existing}
-			local reg_dec_cpy = table.copy(minetest.registered_decorations)
-
-			for k,v in pairs(reg_dec_cpy) do
-				local def_reg
-				local def_name
-				if type(v.decoration)== "table" then 
-					for k2,v2 in pairs(v.decoration) do
+				minetest.register_node(":"..existing,stage_3)
+								
+			else
+				stage_3 = {	
+					description = S(desc_name..stage_3_name),
+					drawtype = drawtype,
+					waving = 1,
+					tiles = {m_name.."_"..reg_name..gt.."_3.png"},
+					inventory_image = inv_img_n..gt.."_3.png",
+					wield_image = inv_img_n..gt.."_3.png",
+					paramtype = "light",
+					sunlight_propagates = true,
+					walkable = walkable,
+					is_ground_content = true,
+					buildable_to = true,
+					liquids_pointable = is_water,
+					sounds = sounds,
+					selection_box = {
+						type = "fixed",
+						fixed = sel_box
+					},
 					
-						if has_value(add_to,v2) then 
-							table.insert(v.decoration,m_name..":"..reg_name.."_1")
-							table.insert(v.decoration,m_name..":"..reg_name.."_2")
-							table.insert(v.decoration,m_name..":"..reg_name.."_4")
-						
-							def_reg = v
-							def_name = k
-						end						
-					end
+					groups = {dig_immediate = 2, flower = 1},
+
+					after_place_node = function(pos, placer, itemstack)
+										flowers_nt.no_grow(pos)
+									   end,
+
+					after_dig_node = function(pos, oldnode, oldmetadata, digger)				
+										flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata)
+									  end,
+					
+					on_timer = flowers_nt.grow_flower_tmr
+				}
 				
-				elseif type(v.decoration) == "string" then
-
-					if has_value(add_to,v.decoration) then 
-
-						v.decoration = {m_name..":"..reg_name.."_1",
-										m_name..":"..reg_name.."_2",
-										v.decoration,
-										m_name..":"..reg_name.."_4"}	
-						def_reg = v
-						def_name = k
-										
-					end			
+			--for water lily/surface water plants
+				if is_water then
+					stage_3.waving = 3
+					stage_3.on_place = flowers_nt.on_place_water
+				end 
+			-- for mesh node_below
+				if drawtype == "mesh" then
+					stage_3.mesh = mesh
+					stage_3.use_texture_alpha = "clip"
+					stage_3.collision_box ={type = "fixed", fixed = sel_box}
+				end	
+				
+			-- add color group
+				if color ~= "nil" then -- it's a string not true nil
+					stage_3.groups["color_"..color] = 1
+				end
+			
+			-- For rot_place 
+				if rot_place then
+					stage_3.paramtype2 = "facedir"
+				end
+							
+			-- on_use
+				if on_use ~= nil then
+					stage_3.on_use = on_use			
+				end	
+			
+			-- on_punch 
+				if on_punch_3 ~= nil then
+					stage_3.on_punch = on_punch_3			
 				end
 				
-				if def_reg ~= nil then
-					flowers_nt.delete_decoration({def_name})
-					minetest.register_decoration(def_reg)
-				end				
-			end	
-						
-		else		
-				local dec_def = {
-					name = m_name..":"..reg_name,
-					deco_type = "simple",
-					place_on = place_on,
-					sidelen = 16,
-					noise_params = {
-						offset = offset,
-						scale = scale,
-						spread = {x = 200, y = 200, z = 200},
-						seed = seed,
-						octaves = 3,
-						persist = 0.6 },
-					biomes = biomes,
-					y_max = y_max,
-					y_min = y_min,
-					place_offset_y = y_offset,
-					decoration = {m_name..":"..reg_name.."_1", 
-								  m_name..":"..reg_name.."_2", 
-								  s3_name,
-								  m_name..":"..reg_name.."_4"}
-				}
-		
+			-- for extra groups 
+				if e_groups then
+					for grp_name,level in pairs(e_groups) do
+						stage_3.groups[grp_name] = level
+					end
+				end	
+
+			-- light source
+			if light_src then
+				if light_src > 0 and light_src <= 15 then
+					stage_3.light_source = light_src 
+				end
+			end
+			
+				minetest.register_node(m_name..":"..reg_name.."_3",stage_3)	
+				
+			end
+
+			--------------------------------
+			--  Flower Growth Stage Four  --
+			--------------------------------	
+			local stage_4 = {
+				description = S(desc_name..stage_4_name),
+				drawtype = drawtype,
+				waving = 1,
+				tiles = {m_name.."_"..reg_name..gt.."_4.png"},
+				inventory_image = inv_img_n..gt.."_4.png",
+				wield_image = inv_img_n..gt.."_4.png",
+				paramtype = "light",
+				sunlight_propagates = true,
+				walkable = walkable,
+				is_ground_content = true,
+				buildable_to = true,
+				liquids_pointable = is_water,
+				sounds = sounds,
+				selection_box = {
+					type = "fixed",
+					fixed = sel_box
+				},
+				groups = {dig_immediate = 3, flower = 1},
+				drop = m_name..":"..reg_name.."_5",
+				
+				after_place_node = function(pos, placer, itemstack)
+									flowers_nt.no_grow(pos)
+								   end,
+
+				after_dig_node = function(pos, oldnode, oldmetadata, digger)			
+									if flowers_nt.flower_cycle_restart(pos,oldnode,oldmetadata) then
+										flowers_nt.seed_spread(pos, oldnode, digger)
+									end							
+								  end,
+				
+				on_timer = flowers_nt.grow_flower_tmr
+			}
+
 			--for water lily/surface water plants
-			if is_water and y_offset == 0 then
-				dec_def.place_offset_y  = 1
+				if is_water then
+					stage_4.waving = 3
+					stage_4.on_place = flowers_nt.on_place_water
+				end 
+			-- for mesh node_below
+				if drawtype == "mesh" then
+					stage_4.mesh = mesh
+					stage_4.use_texture_alpha = "clip"
+					stage_4.collision_box ={type = "fixed", fixed = sel_box}
+				end	
+			
+			-- For rot_place 
+				if rot_place then
+					stage_4.paramtype2 = "facedir"
+				end
+			
+			-- on_punch 
+				if on_punch_4 ~= nil then
+					stage_4.on_punch = on_punch_4			
+				end
+			
+			-- for extra groups 
+			if e_groups then
+				for grp_name,level in pairs(e_groups) do
+					stage_4.groups[grp_name] = level
+				end
 			end
 
-			--for random rotation on placement
-			if rot_place then
-				dec_def.param2 = 0
-				dec_def.param2_max = 3				
+			-- light source
+			if light_src then
+				local light = math.floor(tonumber(light_src/2))
+				
+				if light_src > 0 and light_src <= 15 then
+					stage_1.light_source = tonumber(light_src) 
+				end
 			end
-		
-			minetest.register_decoration(dec_def)
-		end
-	else
---------------
--- Rollback --
---------------	
-	-- Rollback wave settings
-		minetest.settings:set('water_wave_speed', 5.0)
-		minetest.settings:set('water_wave_height', 1.0)
-
-	-- Rollback LBMs
-
-		if existing ~= nil then
-			minetest.register_lbm({
-			  name = m_name..":"..reg_name,
-			  run_at_every_load = true,     -- letting this run everytime in case someone places something out of storage
-			  nodenames = {m_name..":"..reg_name.."_0", 
-						   m_name..":"..reg_name.."_1", 
-						   m_name..":"..reg_name.."_2",
-						   m_name..":"..reg_name.."_4",
-						   m_name..":"..reg_name.."_5"					   
-						   },
-			  action = function(pos, node)
-							minetest.set_node(pos, {name= existing})
-					   end})
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_0"] = existing
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_1"] = existing
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_2"] = existing
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_4"] = existing
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_5"] = existing
-		
-		else
+				
+			minetest.register_node(m_name..":"..reg_name.."_4",stage_4)	
+				
+			--------------------------------
+			--  Flower LBM, trigger timer  --
+			--------------------------------	
+			-- LBM is needed to start the timers on inital mapgen
 			minetest.register_lbm({
 			  name = m_name..":"..reg_name,
 			  run_at_every_load = true, 
 			  nodenames = {m_name..":"..reg_name.."_0", 
 						   m_name..":"..reg_name.."_1", 
 						   m_name..":"..reg_name.."_2",
-						   m_name..":"..reg_name.."_2",					   
+						   s3_name,
 						   m_name..":"..reg_name.."_4",
-						   m_name..":"..reg_name.."_5"					   
+						   m_name..":"..reg_name.."_5"	-- seed			   
 						   },
 			  action = function(pos, node)
-							minetest.set_node(pos, {name= "air"})
-					   end	})	
-
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_0"] = "air"
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_1"] = "air"
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_2"] = "air"
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_3"] = "air"		
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_4"] = "air"
-			flowers_nt.rollback_replace[m_name..":"..reg_name.."_5"] = "air"
-				
-		end
-		
-	-- Remove/Replace items from "main" player inventory on rollback.
-		minetest.register_on_joinplayer(function(player)
-			local roll_replace = flowers_nt.rollback_replace
-			local inv = player:get_inventory()
-			
-			for i_tar,i_rep in pairs(roll_replace) do		
-				if inv:contains_item("main", i_tar) then
-					local main_inv = inv:get_list("main")
-					
-					for i,itemstack in pairs(main_inv) do
-						if itemstack:get_name() == i_tar then
-							inv:remove_item("main", ItemStack(itemstack:get_name().." "..itemstack:get_count()))
-							
-							if i_rep ~= "air" then
-								inv:set_stack("main", i, ItemStack(i_rep.." "..itemstack:get_count()))
+					local meta = minetest.get_meta(pos)
+					local flowers_nt = meta:get_int("flowers_nt")
+					if flowers_nt == 0 then
+						local timer = minetest.get_node_timer(pos)
+							if not timer:is_started() then
+								local flower_stage = tonumber(string.sub(node.name, -1))				
+								
+								-- catch existing node stage 3
+								if flower_stage == nil then
+									flower_stage = 3
+								end
+								
+								if flower_stage == 3 or flower_stage == 4 then
+									timer:start(math.random(2*(time_min), 2*(time_max)))
+								else
+									timer:start(math.random(time_min, time_max))
+								end
 							end
-							
-							minetest.chat_send_player(player:get_player_name(),"Flowers_NT Rollback: "..itemstack:get_name().." replaced with "..i_rep.." x"..itemstack:get_count())				
 						end
-					end						
+					end,
+			})
+		
+			----------------------------------
+			--  Flower Register Decoration  --
+			----------------------------------
+			
+			if existing ~= nil then
+				
+				local function has_value (tab, val)
+					for index, value in pairs(tab) do
+						if value == val then
+							return value
+						end
+					end
+					return false
+				end
+
+				local add_to = {existing}
+				local reg_dec_cpy = table.copy(minetest.registered_decorations)
+
+				for k,v in pairs(reg_dec_cpy) do
+					local def_reg = nil
+					local def_name = nil
+					if type(v.decoration)== "table" then 
+						for k2,v2 in pairs(v.decoration) do
+						
+							if has_value(add_to,v2) then 
+								table.insert(v.decoration,m_name..":"..reg_name.."_1")
+								table.insert(v.decoration,m_name..":"..reg_name.."_2")
+								table.insert(v.decoration,m_name..":"..reg_name.."_4")
+							
+								def_reg = v
+								def_name = k
+							end						
+						end
+					
+					elseif type(v.decoration) == "string" then
+
+						if has_value(add_to,v.decoration) then 
+
+							v.decoration = {m_name..":"..reg_name.."_1",
+											m_name..":"..reg_name.."_2",
+											v.decoration,
+											m_name..":"..reg_name.."_4"}	
+							def_reg = v
+							def_name = k
+											
+						end			
+					end
+					
+					if def_reg ~= nil then
+						minetest.registered_decorations[def_name] = def_reg
+						
+					end			
 				end	
+							
+			else		
+					local dec_def = {
+						name = m_name..":"..reg_name,
+						deco_type = "simple",
+						place_on = place_on,
+						sidelen = 16,
+						noise_params = {
+							offset = offset,
+							scale = scale,
+							spread = {x = 200, y = 200, z = 200},
+							seed = seed,
+							octaves = 3,
+							persist = 0.6 },
+						biomes = biomes,
+						y_max = y_max,
+						y_min = y_min,
+						place_offset_y = y_offset,
+						decoration = {m_name..":"..reg_name.."_1", 
+									  m_name..":"..reg_name.."_2", 
+									  s3_name,
+									  m_name..":"..reg_name.."_4"}
+					}
+			
+				--for water lily/surface water plants
+				if is_water and y_offset == 0 then
+					dec_def.place_offset_y  = 1
+				end
+
+				--for random rotation on placement
+				if rot_place then
+					dec_def.param2 = 0
+					dec_def.param2_max = 3				
+				end
+			
+				minetest.register_decoration(dec_def)
 			end
-		end)		
-	end	
-end
+		else
+	--------------
+	-- Rollback --
+	--------------	
+		-- Rollback wave settings
+			minetest.settings:set('water_wave_speed', 5.0)
+			minetest.settings:set('water_wave_height', 1.0)
+
+		-- Rollback LBMs
+
+			if existing ~= nil then
+				minetest.register_lbm({
+				  name = m_name..":"..reg_name,
+				  run_at_every_load = true,     -- letting this run everytime in case someone places something out of storage
+				  nodenames = {m_name..":"..reg_name.."_0", 
+							   m_name..":"..reg_name.."_1", 
+							   m_name..":"..reg_name.."_2",
+							   m_name..":"..reg_name.."_4",
+							   m_name..":"..reg_name.."_5"					   
+							   },
+				  action = function(pos, node)
+								minetest.set_node(pos, {name= existing})
+						   end})
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_0"] = existing
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_1"] = existing
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_2"] = existing
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_4"] = existing
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_5"] = existing
+			
+			else
+				minetest.register_lbm({
+				  name = m_name..":"..reg_name,
+				  run_at_every_load = true, 
+				  nodenames = {m_name..":"..reg_name.."_0", 
+							   m_name..":"..reg_name.."_1", 
+							   m_name..":"..reg_name.."_2",
+							   m_name..":"..reg_name.."_2",					   
+							   m_name..":"..reg_name.."_4",
+							   m_name..":"..reg_name.."_5"					   
+							   },
+				  action = function(pos, node)
+								minetest.set_node(pos, {name= "air"})
+						   end	})	
+
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_0"] = "air"
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_1"] = "air"
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_2"] = "air"
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_3"] = "air"		
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_4"] = "air"
+				flowers_nt.rollback_replace[m_name..":"..reg_name.."_5"] = "air"
+					
+			end
+			
+		-- Remove/Replace items from "main" player inventory on rollback.
+			minetest.register_on_joinplayer(function(player)
+				local roll_replace = flowers_nt.rollback_replace
+				local inv = player:get_inventory()
+				
+				for i_tar,i_rep in pairs(roll_replace) do		
+					if inv:contains_item("main", i_tar) then
+						local main_inv = inv:get_list("main")
+						
+						for i,itemstack in pairs(main_inv) do
+							if itemstack:get_name() == i_tar then
+								inv:remove_item("main", ItemStack(itemstack:get_name().." "..itemstack:get_count()))
+								
+								if i_rep ~= "air" then
+									inv:set_stack("main", i, ItemStack(i_rep.." "..itemstack:get_count()))
+								end
+								
+								minetest.chat_send_player(player:get_player_name(),"Flowers_NT Rollback: "..itemstack:get_name().." replaced with "..i_rep.." x"..itemstack:get_count())				
+							end
+						end						
+					end	
+				end
+			end)		
+		end -- Rollback End
+	end -- Valid data end
+end -- Function End

@@ -33,6 +33,19 @@ dofile(m_path .. "/i_api.lua")
 
 -- Load confirmation 
 -- minetest.debug("[MOD] flowers_nt loaded")
+
+-- This is required to refresh the decoration cache as flowers_nt directly updates
+-- minetest.registered_decorations for existing flowers. Without doing this different 
+-- growth stages are not placed.
+minetest.register_on_mods_loaded(
+function()	
+	local reg_dec_cpy = table.copy(minetest.registered_decorations)
+	minetest.clear_registered_decorations()
+	
+	for k,v in pairs(reg_dec_cpy) do
+		minetest.register_decoration(v)		
+	end
+end)
 		
 
 
